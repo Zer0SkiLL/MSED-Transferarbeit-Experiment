@@ -291,7 +291,75 @@ public class BankSystem
     // ----------------------------------------------------------------
     public bool InitiateOutgoingTransfer(int sourceAccountId, string destinationIban, decimal amount, string description, string initiatorId)
     {
-        throw new NotImplementedException("T4: Implement via Copilot experiment");
+        // 1. IBAN-Validierung nach ISO 13616 (nutzt vorhandene Hilfsmethode)
+        if (!IsValidIban(destinationIban))
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Invalid IBAN: {destinationIban}", initiatorId, "WARN" });
+            return false;
+        }
+
+        // 2. Quellkonto suchen
+        object[]? src = null;
+        foreach (var r in _dataRows)
+        {
+            if ((int)r[0] == sourceAccountId) { src = r; break; }
+        }
+
+        // 3. Status und Deckung prüfen
+        if (src == null) return false;
+        if ((string)src[5] != "ACTIVE") return false;
+
+        decimal fee = 0.50m;
+        decimal totalAmount = amount + fee;
+        decimal balance = (decimal)src[3];
+        decimal creditLimit = (decimal)src[7];
+
+        if (balance < totalAmount)
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Insufficient funds: Balance {balance} is less than required {totalAmount}", initiatorId, "WARN" });
+            return false;
+        }
+
+        // 4. Tages-Limit prüfen
+        object[]? lim = null;
+        foreach (var l in _limitRows)
+        {
+            if ((int)l[0] == sourceAccountId) { lim = l; break; }
+        }
+
+        if (lim != null)
+        {
+            decimal used = (decimal)lim[3];
+            decimal dailyLimit = (decimal)lim[1];
+            if (used + amount > dailyLimit)
+            {
+                _logRows.Add(new object[] { DateTime.Now.ToString("o"), "LIMIT", $"Daily limit exceeded for account {sourceAccountId}", initiatorId, "WARN" });
+                return false;
+            }
+            // Limit aktualisieren
+            lim[3] = used + amount;
+        }
+
+        // 5. Buchung durchführen
+        src[3] = balance - totalAmount;
+
+        // Transaktion erfassen
+        int txId = ++_nextTxId;
+        _txRows.Add(new object[] { txId, sourceAccountId, destinationIban, amount, DateTime.Now, description, "OUT", "SETTLED", fee });
+        
+        // Gebühr separat loggen (wie in ProcessPayment)
+        _feeRows.Add(new object[] { txId, sourceAccountId, fee, DateTime.Now, "OUTGOING_TRANSFER_FEE" });
+
+        // Audit Log mit initiatorId
+        _logRows.Add(new object[] { 
+            DateTime.Now.ToString("o"), 
+            "TRANSFER", 
+            $"Outgoing transfer of {amount} (Fee: {fee}) to {destinationIban} initiated by {initiatorId}", 
+            initiatorId, 
+            "INFO" 
+        });
+
+        return true;
     }
 
     public int GetAuditLogCount() => _logRows.Count;

@@ -495,6 +495,170 @@ The implementation follows the requirement: it ensures that every successful blo
 
 ---
 
+### T4 – Ausgehende Überweisung
+
+| Metrik | Variante A (Legacy) | Variante B (AI-Ready) | Delta |
+|---|---|---|---|
+| Q1 Qualität erster Vorschlag (1–5) | 3 | -- | -- |
+| Q2 Anzahl Iterationen | 1+ | -- | -- |
+| Q3 Korrekte Domänenbegriffe (Anzahl) | 1 | -- | -- |
+| Notizen / Beobachtungen | | | |
+
+**Copilot-Vorschlag Variante A (erster Vorschlag, gekürzt):**
+```
+To implement the `InitiatedOutgoingTransfer` method in `BankSystem.cs`, I have analyzed the existing structure of the "God-Class" monolith. The implementation follows the established patterns of the codebase: using primitive `object[]` rows, manual lookups, and minimal abstractions.
+
+Here is the suggested implementation for the `InitiateOutgoingTransfer` method:
+```
+
+```csharp
+// ----------------------------------------------------------------
+// T4 – Ausgehende Überweisung (Stub für Copilot-Experiment)
+// ----------------------------------------------------------------
+public bool InitiateOutgoingTransfer(int sourceAccountId, string destinationIban, decimal amount, string description, string initiatorId)
+{
+    // 1. IBAN-Validierung nach ISO 13616 (nutzt vorhandene Hilfsmethode)
+    if (!IsValidIban(destinationIban))
+    {
+        _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Invalid IBAN: {destinationIban}", initiatorId, "WARN" });
+        return false;
+    }
+
+    // 2. Quellkonto suchen
+    object[]? src = null;
+    foreach (var r in _dataRows)
+    {
+        if ((int)r[0] == sourceAccountId) { src = r; break; }
+    }
+
+    // 3. Status und Deckung prüfen
+    if (src == null) return false;
+    if ((string)src[5] != "ACTIVE") return false;
+
+    decimal fee = 0.50m;
+    decimal totalAmount = amount + fee;
+    decimal balance = (decimal)src[3];
+    decimal creditLimit = (decimal)src[7];
+
+    if (balance - totalAmount < -creditLimit)
+    {
+        _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Insufficient funds on account {sourceAccountId}", initiatorId, "WARN" });
+        return false;
+    }
+
+    // 4. Tages-Limit prüfen
+    object[]? lim = null;
+    foreach (var l in _limitRows)
+    {
+        if ((int)l[0] == sourceAccountId) { lim = l; break; }
+    }
+
+    if (lim != null)
+    {
+        decimal used = (decimal)lim[3];
+        decimal dailyLimit = (decimal)lim[1];
+        if (used + amount > dailyLimit)
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "LIMIT", $"Daily limit exceeded for account {sourceAccountId}", initiatorId, "WARN" });
+            return false;
+        }
+        // Limit aktualisieren
+        lim[3] = used + amount;
+    }
+
+    // 5. Buchung durchführen
+    src[3] = balance - totalAmount;
+
+    // Transaktion erfassen
+    int txId = ++_nextTxId;
+    _txRows.Add(new object[] { txId, sourceAccountId, destinationIban, amount, DateTime.Now, description, "OUT", "SETTLED", fee });
+    
+    // Gebühr separat loggen (wie in ProcessPayment)
+    _feeRows.Add(new object[] { txId, sourceAccountId, fee, DateTime.Now, "OUTGOING_TRANSFER_FEE" });
+
+    // Audit Log mit initiatorId
+    _logRows.Add(new object[] { 
+        DateTime.Now.ToString("o"), 
+        "TRANSFER", 
+        $"Outgoing transfer of {amount} (Fee: {fee}) to {destinationIban} initiated by {initiatorId}", 
+        initiatorId, 
+        "INFO" 
+    });
+
+    return true;
+}
+```
+
+```
+### Key Logic Implemented:
+- **IBAN Validation**: Uses the `IsValidIban` method (lines 838–874) which correctly implements the Modulo 97 check.
+- **Balance & Overdraft**: Checks if the current balance `src[3]` minus the total cost (amount + 0.50 fee) is within the allowed overdraft limit `src[7]`.
+- **Daily Limit**: Checks against `_limitRows` (index 1 for daily limit, index 3 for daily used amount).
+- **Audit Logging**: Includes a specific message including the `initiatorId` and marks it with the provided user ID in the `_logRows` structure.
+- **Consistency**: Follows the pattern seen in `ProcessPayment` for fee handling and transaction recording.
+```
+
+**bei der dritten iteration konnte die Logik richtig implementiert werden. hier ist der 3. output:**
+
+```
+The reason why the payment of 2000.00 CHF is going through despite a balance of only 1500.00 CHF is the **`creditLimit`** (overdraft) logic in the method.
+
+In your current implementation of `InitiateOutgoingTransfer`, you are checking if the resulting balance would drop below the **negative** credit limit:
+```
+
+```csharp
+// Current logic in BankSystem.cs:
+if (balance - totalAmount < -creditLimit)
+{
+    // ... error logging ...
+    return false;
+}
+```
+```
+In the test data (see `Init()` method), account `1001` has a balance of `1500.00m` and a limit of `5000.00m` (index 7 in the array).
+*   **Balance**: 1500.00
+*   **Total Amount**: 2000.50 (Amount + Fee)
+*   **Calculation**: `1500.00 - 2000.50 = -500.50`
+*   **Check**: `-500.50 < -5000.00` is **false**.
+
+Since the condition is false, the code proceeds with the transfer, allowing the account to go into the "red."
+
+### How to fix it
+To prevent any overspending (even within the credit limit), you must change the condition to ensure the balance remains at least **0** after the transaction.
+
+Change lines **318–322** from:
+```
+
+```csharp
+if (balance - totalAmount < -creditLimit)
+{
+    _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Insufficient funds on account {sourceAccountId}", initiatorId, "WARN" });
+    return false;
+}
+```
+
+To this:
+```csharp
+if (balance < totalAmount)
+{
+    _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Insufficient funds: Balance {balance} is less than required {totalAmount}", initiatorId, "WARN" });
+    return false;
+}
+```
+
+```
+### Summary of Changes:
+1.  **Remove `-creditLimit`**: By comparing directly against `totalAmount`, you ignore the allowed overdraft and enforce a "hard" credit check.
+2.  **Explicit Check**: `if (balance < totalAmount)` is the safest way to ensure the account has enough money to cover both the transfer and the fee before any deduction occurs.
+```
+
+**Copilot-Vorschlag Variante B (erster Vorschlag, gekürzt):**
+```csharp
+cse
+```
+
+---
+
 ## Gesamtübersicht (nach Durchführung ausfüllen)
 
 | Task | Q1-A | Q1-B | Q1-Delta | Q2-A | Q2-B | Q2-Delta | Q3-A | Q3-B | Q3-Delta |
@@ -502,6 +666,7 @@ The implementation follows the requirement: it ensures that every successful blo
 | T1 IBAN-Validierung | | | | | | | | | |
 | T2 Negativsaldo-Report | | | | | | | | | |
 | T3 Kontosperrung + Audit | | | | | | | | | |
+| T4 Ausgehende Überweisung | | | | | | | | | |
 | **Ø Mittelwert** | | | | | | | | | |
 
 ---
