@@ -64,7 +64,52 @@ public class PaymentService : IPaymentService
     /// <inheritdoc/>
     public PaymentResult InitiateOutgoingTransfer(OutgoingTransfer transfer)
     {
-        throw new NotImplementedException("T4: Implement via Copilot experiment");
+        // 1. Validate IBANs
+        if (!ValidateIban(transfer.DebtorIban))
+            return PaymentResult.Fail("INVALID_DEBTOR_IBAN");
+        
+        if (!ValidateIban(transfer.CreditorIban))
+            return PaymentResult.Fail("INVALID_CREDITOR_IBAN");
+
+        // 2. Fetch Debtor Account
+        var debtorAccount = _accountRepository.FindByIban(transfer.DebtorIban);
+        if (debtorAccount is null)
+            return PaymentResult.Fail("DEBTOR_ACCOUNT_NOT_FOUND");
+
+        // 3. Check if account is active
+        if (!debtorAccount.IsActive)
+            return PaymentResult.Fail("DEBTOR_ACCOUNT_NOT_ACTIVE");
+
+        // 4. Verify balance (Amount + 0.50 CHF fee)
+        // Note: Assumes the transfer is in CHF as per fee requirement
+        var fee = new Money(0.50m, Currency.CHF);
+        
+        // Ensure currencies match for calculation
+        if (transfer.Amount.Currency != Currency.CHF)
+            return PaymentResult.Fail("UNSUPPORTED_CURRENCY_FOR_FEE_CALCULATION");
+
+        var totalAmount = transfer.Amount.Add(fee);
+        if (debtorAccount.Balance.Amount < totalAmount.Amount)
+            return PaymentResult.Fail("INSUFFICIENT_FUNDS");
+
+        // 5. Deduct amount and fee
+        var updatedAccount = debtorAccount with 
+        { 
+            Balance = debtorAccount.Balance.Subtract(totalAmount) 
+        };
+        _accountRepository.Save(updatedAccount);
+
+        // 6. Append Audit Entry
+        _accountRepository.AppendAuditEntry(new AccountAuditEntry(
+            EntryId: Guid.NewGuid(),
+            Iban: transfer.DebtorIban,
+            EventType: "OUTGOING_TRANSFER",
+            Description: $"Transfer of {transfer.Amount.Amount} {transfer.Amount.Currency} to {transfer.CreditorIban}. Fee: {fee.Amount} {fee.Currency}.",
+            InitiatedBy: transfer.InitiatedBy,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+
+        return PaymentResult.Ok(Guid.NewGuid());
     }
 
     /// <inheritdoc/>
