@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace BankApp.Account;
 
 // ============================================================
@@ -82,5 +84,32 @@ public class AccountService : IAccountService
         ));
 
         return AccountOperationResult.Ok();
+    }
+    
+    /// <inheritdoc/>
+    public string GetNegativeBalanceReport()
+    {
+        var negativeAccounts = GetAccountsWithNegativeBalance();
+        
+        if (negativeAccounts.Count == 0)
+        {
+            return "No accounts with negative balance found.";
+        }
+
+        var report = new StringBuilder();
+        report.AppendLine("Negative Balance Report");
+        report.AppendLine("=======================");
+        report.AppendLine($"Generated at: {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        report.AppendLine();
+
+        foreach (var account in negativeAccounts)
+        {
+            report.AppendLine($"IBAN: {account.Iban} | Balance: {account.Balance.Amount:F2} {account.Balance.Currency} | Status: {account.Status}");
+        }
+
+        report.AppendLine();
+        report.AppendLine($"Total accounts: {negativeAccounts.Count}");
+
+        return report.ToString();
     }
 }

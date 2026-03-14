@@ -140,7 +140,7 @@ public class BankSystemTests
     public void T3_BlockAccount_ActiveAccount_ReturnsTrue()
     {
         var sys = CreateSystem();
-        bool result = sys.BlockAccount(1001, "Fraud");
+        bool result = sys.BlockAccount(1001, "Fraud", "Test");
         Assert.True(result);
     }
 
@@ -148,7 +148,7 @@ public class BankSystemTests
     public void T3_BlockAccount_SetsStatusToBlocked()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1001, "Fraud");
+        sys.BlockAccount(1001, "Fraud", "Test");
         string status = sys.GetAccountStatus(1001);
         Assert.Equal("BLOCKED", status);
     }
@@ -158,7 +158,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         // Konto 1004 ist bereits BLOCKED
-        bool result = sys.BlockAccount(1004, "Nochmals");
+        bool result = sys.BlockAccount(1004, "Nochmals", "Test");
         Assert.False(result);
     }
 
@@ -166,7 +166,7 @@ public class BankSystemTests
     public void T3_BlockAccount_UnknownAccount_ReturnsFalse()
     {
         var sys = CreateSystem();
-        bool result = sys.BlockAccount(9999, "Test");
+        bool result = sys.BlockAccount(9999, "Test", "Test");
         Assert.False(result);
     }
 
@@ -175,7 +175,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         int logCountBefore = sys.GetAuditLog().Count;
-        sys.BlockAccount(1001, "SuspectedFraud");
+        sys.BlockAccount(1001, "SuspectedFraud", "Test");
         int logCountAfter = sys.GetAuditLog().Count;
         Assert.True(logCountAfter > logCountBefore);
     }
@@ -184,7 +184,7 @@ public class BankSystemTests
     public void T3_BlockAccount_AuditLogEntryContainsAccountId()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1006, "RegulatoryOrder");
+        sys.BlockAccount(1006, "RegulatoryOrder", "Test");
         var log = sys.GetAuditLogByCategory("BLOCK");
         Assert.Contains(log, e => e[2].ToString()!.Contains("1006"));
     }
@@ -193,7 +193,7 @@ public class BankSystemTests
     public void T3_BlockedAccount_CannotProcessPayment()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1001, "Fraud");
+        sys.BlockAccount(1001, "Fraud", "Test");
         bool payment = sys.ProcessPayment(1001, "CH5604835012345678011", 10m, "Test");
         Assert.False(payment);
     }

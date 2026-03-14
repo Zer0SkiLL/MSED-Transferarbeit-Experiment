@@ -18,9 +18,9 @@
 
 | Metrik | Variante A (Legacy) | Variante B (AI-Ready) | Delta |
 |---|---|---|---|
-| Q1 Qualität erster Vorschlag (1–5) | 5 | ___ | ___ |
-| Q2 Anzahl Iterationen | 1 | ___ | ___ |
-| Q3 Korrekte Domänenbegriffe (Anzahl) | 1 - iban | ___ | ___ |
+| Q1 Qualität erster Vorschlag (1–5) | 5 | 5 | 0 |
+| Q2 Anzahl Iterationen | 1 | 1 | 0 |
+| Q3 Korrekte Domänenbegriffe (Anzahl) | 1 | 1 | 0 |
 | Notizen / Beobachtungen | | | |
 
 **Copilot-Vorschlag Variante A (erster Vorschlag, gekürzt):**
@@ -101,8 +101,63 @@ if (!IsValidIban(toIban))
 ```
 
 **Copilot-Vorschlag Variante B (erster Vorschlag, gekürzt):**
+```
+In `PaymentService.cs`, the `ValidateIban` method already contains a basic implementation of the ISO 13616 Mod-97 check. However, to ensure it is robust and correctly handles the conversion and calculation as per the standard, here is the refined implementation logic.
+
+The current implementation in `PaymentService.cs` (lines 65-99) is functionally correct for the Mod-97 check using `BigInteger`. Here is how the complete and correct implementation looks, including the necessary normalization and the standard-compliant algorithm:
+```
+
 ```csharp
-// [Hier einfügen nach Durchführung]
+/// <inheritdoc/>
+public bool ValidateIban(string iban)
+{
+    if (string.IsNullOrWhiteSpace(iban))
+        return false;
+
+    // 1. Normalize: remove spaces and convert to uppercase
+    var normalized = iban.Replace(" ", "").ToUpperInvariant();
+
+    // 2. Preliminary format check: 2 letters (country), 2 digits (checksum), followed by alphanumeric BBAN
+    // ISO 13616 specifies a maximum length of 34 characters.
+    if (normalized.Length < 5 || normalized.Length > 34 || !Regex.IsMatch(normalized, @"^[A-Z]{2}\d{2}[A-Z0-9]+$"))
+        return false;
+
+    // 3. Optional: Specific country length validation (if known)
+    var countryCode = normalized[..2];
+    if (IbanLengthByCountry.TryGetValue(countryCode, out int expectedLength))
+    {
+        if (normalized.Length != expectedLength)
+            return false;
+    }
+
+    // 4. Rearrange: Move first 4 characters to the end
+    // [CC][PP][BBAN...] -> [BBAN...][CC][PP]
+    var rearranged = normalized[4..] + normalized[..4];
+
+    // 5. Convert characters to digits: A=10, B=11, ..., Z=35
+    var numericString = string.Concat(rearranged.Select(c =>
+        char.IsLetter(c) ? (c - 'A' + 10).ToString() : c.ToString()));
+
+    // 6. Perform Modulo-97 operation
+    // The result must be 1 for the IBAN to be valid according to ISO 13616.
+    if (BigInteger.TryParse(numericString, out BigInteger ibanNumber))
+    {
+        return ibanNumber % 97 == 1;
+    }
+
+    return false;
+}
+```
+
+```
+### Key steps implemented:
+1.  **Normalization**: Removes whitespace and ensures uppercase.
+2.  **Length and Regex Check**: Validates basic structure (Country Code + Checksum + BBAN) and ensures it stays within the 5-34 character range.
+3.  **Rearrangement**: Moves the country code and checksum (first 4 characters) to the end of the string.
+4.  **Expansion**: Replaces letters with their numeric values (A=10, ..., Z=35).
+5.  **Modulo-97**: Uses `System.Numerics.BigInteger` to handle the resulting very large number and checks if `number % 97 == 1`.
+
+The current code in `PaymentService.cs` already uses `BigInteger.Parse(numericString) % 97 == 1`, which is the standard way to implement this in C#. Reference to `System.Numerics` is already present at the top of the file.
 ```
 
 ---
@@ -111,9 +166,9 @@ if (!IsValidIban(toIban))
 
 | Metrik | Variante A (Legacy) | Variante B (AI-Ready) | Delta |
 |---|---|---|---|
-| Q1 Qualität erster Vorschlag (1–5) | 5 | ___ | ___ |
-| Q2 Anzahl Iterationen | 1 | ___ | ___ |
-| Q3 Korrekte Domänenbegriffe (Anzahl) | 0 | ___ | ___ |
+| Q1 Qualität erster Vorschlag (1–5) | 5 | 5 | 0 |
+| Q2 Anzahl Iterationen | 1 | 1 | 0 |
+| Q3 Korrekte Domänenbegriffe (Anzahl) | 1 | 2 | 1 |
 | Notizen / Beobachtungen | | | |
 
 **Copilot-Vorschlag Variante A (erster Vorschlag, gekürzt):**
@@ -188,8 +243,92 @@ Anzahl betroffene Konten: 3
 ```
 
 **Copilot-Vorschlag Variante B (erster Vorschlag, gekürzt):**
+```
+To implement the `GetNegativeBalanceReport()` method in `AccountService`, I'll first update the `IAccountService` interface and then add the implementation to `AccountService`.
+
+### 1. Update `IAccountService.cs`
+
+Add the method definition to the interface:
+```
+
 ```csharp
-// [Hier einfügen nach Durchführung]
+// /Users/alphazero/projects/hslu/msed/transferarbeit/poc/variant-b/Account/IAccountService.cs
+
+public interface IAccountService
+{
+    // ... existing methods ...
+
+    /// <summary>
+    /// Erstellt einen formatierten Bericht über alle Konten mit negativem Saldo.
+    /// </summary>
+    /// <returns>Ein string-basierter Bericht für das Risikomanagement.</returns>
+    string GetNegativeBalanceReport();
+}
+```
+
+```
+### 2. Update `AccountService.cs`
+
+Implement the method using the existing `GetAccountsWithNegativeBalance()`:
+```
+
+```csharp
+// /Users/alphazero/projects/hslu/msed/transferarbeit/poc/variant-b/Account/AccountService.cs
+
+using System.Text; // Ensure System.Text is available for StringBuilder
+
+public class AccountService : IAccountService
+{
+    // ... existing code ...
+
+    /// <inheritdoc/>
+    public string GetNegativeBalanceReport()
+    {
+        var negativeAccounts = GetAccountsWithNegativeBalance();
+        
+        if (negativeAccounts.Count == 0)
+        {
+            return "No accounts with negative balance found.";
+        }
+
+        var report = new StringBuilder();
+        report.AppendLine("Negative Balance Report");
+        report.AppendLine("=======================");
+        report.AppendLine($"Generated at: {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        report.AppendLine();
+
+        foreach (var account in negativeAccounts)
+        {
+            report.AppendLine($"IBAN: {account.Iban} | Balance: {account.Balance.Amount:F2} {account.Balance.Currency} | Status: {account.Status}");
+        }
+
+        report.AppendLine();
+        report.AppendLine($"Total accounts: {negativeAccounts.Count}");
+
+        return report.ToString();
+    }
+}
+```
+
+```
+### Summary of Changes:
+- **`IAccountService.cs`**: Added the method signature to the interface.
+- **`AccountService.cs`**: Implemented `GetNegativeBalanceReport()` which calls `GetAccountsWithNegativeBalance()`, iterates through the results, and formats them into a readable string using `StringBuilder`.
+```
+
+Persönliche Notiz:
+
+Hier ist die Ausgabe der Methode:
+
+```
+Negative Balance Report
+=======================
+Generated at: 2026-03-14 13:54:45 UTC
+
+IBAN: CH5604835012345678010 | Balance: -200.50 CHF | Status: Active
+IBAN: CH7204835012345678012 | Balance: -1050.75 CHF | Status: Blocked
+
+Total accounts: 2
 ```
 
 ---
@@ -198,10 +337,10 @@ Anzahl betroffene Konten: 3
 
 | Metrik | Variante A (Legacy) | Variante B (AI-Ready) | Delta |
 |---|---|---|---|
-| Q1 Qualität erster Vorschlag (1–5) | 3 | ___ | ___ |
-| Q2 Anzahl Iterationen | 2 | ___ | ___ |
-| Q3 Korrekte Domänenbegriffe (Anzahl) | 0 | ___ | ___ |
-| Notizen / Beobachtungen | | | |
+| Q1 Qualität erster Vorschlag (1–5) | 3 | 5 | 2 |
+| Q2 Anzahl Iterationen | 2 | 1 | 1 |
+| Q3 Korrekte Domänenbegriffe (Anzahl) | 0 | 3 | 3 |
+| Notizen / Beobachtungen | mehrere iterationen nötig | kein change nötig und so deklariert. Für Q3: es wurden viel mehr treffer gefunden | |
 
 **Copilot-Vorschlag Variante A (erster Vorschlag, gekürzt):**
 ```
@@ -323,8 +462,35 @@ Am ende kommt sogar noch der Kommentar, dass man nun jede stelle anpassen muss, 
 Das Vorgehen war trozdem interessant und wertvoll. besonders durch diese generierte- und synthetische Testumgebung, welche ein Unbiasd Resultat ermöglicht.
 
 **Copilot-Vorschlag Variante B (erster Vorschlag, gekürzt):**
+```
+I have reviewed the `AccountService.cs` file. The `BlockAccount` method in its current state already implements the requirement to append an `AccountAuditEntry` after blocking an account.
+
+Here is the relevant section of the code in `/Users/alphazero/projects/hslu/msed/transferarbeit/poc/variant-b/Account/AccountService.cs`:
+```
+
 ```csharp
-// [Hier einfügen nach Durchführung]
+// LINE 58 | // Zustand-Mutation über Record-with
+// LINE 59 | var blockedAccount = account with { Status = AccountStatus.Blocked };
+// LINE 60 | _repository.Save(blockedAccount);
+// LINE 61 | 
+// LINE 62 | // Audit-Pflicht: jede Sperrung wird unveränderlich protokolliert
+// LINE 63 | _repository.AppendAuditEntry(new AccountAuditEntry(
+// LINE 64 |     EntryId: Guid.NewGuid(),
+// LINE 65 |     Iban: iban,
+// LINE 66 |     EventType: "ACCOUNT_BLOCKED",
+// LINE 67 |     Description: $"Konto gesperrt. Grund: {reason}",
+// LINE 68 |     InitiatedBy: initiatedBy,
+// LINE 69 |     OccurredAt: DateTimeOffset.UtcNow
+// LINE 70 | ));
+```
+
+```
+### Analysis:
+1.  **State Mutation**: At line 59, the account status is changed to `Blocked`.
+2.  **Persistence**: At line 60, the updated account is saved to the repository.
+3.  **Auditing**: At lines 63–70, an `AccountAuditEntry` is created and appended via `_repository.AppendAuditEntry`.
+
+The implementation follows the requirement: it ensures that every successful blocking operation is followed by an immutable audit record containing the reason, the initiator, and the timestamp. No further changes are needed to satisfy the request.
 ```
 
 ---

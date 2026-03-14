@@ -20,7 +20,7 @@ public class PaymentServiceTests
     // ----------------------------------------------------------------
 
     [Theory]
-    [InlineData("DE89370400440532013000")]   // Deutschland – korrekte Prüfziffer
+    [InlineData("DE88500700100175526303")]   // Deutschland – korrekte Prüfziffer
     [InlineData("CH5604835012345678009")]    // Schweiz – Testdaten-IBAN
     [InlineData("AT611904300234573201")]     // Österreich
     [InlineData("GB29NWBK60161331926819")]   // Grossbritannien

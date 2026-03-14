@@ -31,4 +31,10 @@ public interface IAccountService
     /// Schreibt eine Gutschrift auf ein Konto (z.B. bei eingehendem Zahlungsauftrag).
     /// </summary>
     AccountOperationResult CreditAccount(string iban, Money amount, string remittanceInfo);
+    
+    /// <summary>
+    /// Erstellt einen formatierten Bericht über alle Konten mit negativem Saldo.
+    /// </summary>
+    /// <returns>Ein string-basierter Bericht für das Risikomanagement.</returns>
+    string GetNegativeBalanceReport();
 }

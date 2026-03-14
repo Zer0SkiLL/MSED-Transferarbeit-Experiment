@@ -67,34 +67,37 @@ public class PaymentService : IPaymentService
         if (string.IsNullOrWhiteSpace(iban))
             return false;
 
-        // Normalisieren: Leerzeichen entfernen, Grossbuchstaben
+        // 1. Normalize: remove spaces and convert to uppercase
         var normalized = iban.Replace(" ", "").ToUpperInvariant();
 
-        // Basisformat: 2 Buchstaben (Ländercode) + 2 Ziffern (Prüfziffer) + BBAN
-        if (!Regex.IsMatch(normalized, @"^[A-Z]{2}\d{2}[A-Z0-9]+$"))
+        // 2. Preliminary format check: 2 letters (country), 2 digits (checksum), followed by alphanumeric BBAN
+        // ISO 13616 specifies a maximum length of 34 characters.
+        if (normalized.Length < 5 || normalized.Length > 34 || !Regex.IsMatch(normalized, @"^[A-Z]{2}\d{2}[A-Z0-9]+$"))
             return false;
 
-        // Ländercode extrahieren und Länge prüfen
+        // 3. Optional: Specific country length validation (if known)
         var countryCode = normalized[..2];
         if (IbanLengthByCountry.TryGetValue(countryCode, out int expectedLength))
         {
             if (normalized.Length != expectedLength)
                 return false;
         }
-        else
-        {
-            // Unbekanntes Land: Mindestlänge 15, Maximallänge 34 (ISO 13616)
-            if (normalized.Length < 15 || normalized.Length > 34)
-                return false;
-        }
 
-        // Mod-97-Prüfzifferberechnung (ISO 13616)
-        // Schritt: Erste 4 Zeichen ans Ende verschieben, Buchstaben in Ziffern konvertieren
+        // 4. Rearrange: Move first 4 characters to the end
+        // [CC][PP][BBAN...] -> [BBAN...][CC][PP]
         var rearranged = normalized[4..] + normalized[..4];
+
+        // 5. Convert characters to digits: A=10, B=11, ..., Z=35
         var numericString = string.Concat(rearranged.Select(c =>
             char.IsLetter(c) ? (c - 'A' + 10).ToString() : c.ToString()));
 
-        // BigInteger für Mod-97 (Zahl zu gross für long)
-        return BigInteger.Parse(numericString) % 97 == 1;
+        // 6. Perform Modulo-97 operation
+        // The result must be 1 for the IBAN to be valid according to ISO 13616.
+        if (BigInteger.TryParse(numericString, out BigInteger ibanNumber))
+        {
+            return ibanNumber % 97 == 1;
+        }
+
+        return false;
     }
 }
