@@ -1,0 +1,138 @@
+openapi: "3.1.0"
+info:
+  title: Payment API
+  description: |
+    Domänen-API für den Bounded Context **Payment**.
+    Zuständig für die Verarbeitung eingehender und ausgehender Zahlungsaufträge.
+    
+    IBAN-Validierung erfolgt nach ISO 13616 (Mod-97-Algorithmus).
+    Zahlungsformat folgt ISO 20022 (pain.001 / camt.054).
+  version: "1.0.0"
+  contact:
+    name: Core Banking Team
+    email: corebanking@bank.ch
+
+tags:
+  - name: payments
+    description: Zahlungsverarbeitung
+
+paths:
+  /payments/incoming:
+    post:
+      operationId: receiveIncomingPayment
+      summary: Eingehenden Zahlungsauftrag verarbeiten
+      description: |
+        Verarbeitet einen eingehenden SEPA Credit Transfer oder SIC-Zahlung.
+        
+        **Validierungsschritte:**
+        1. IBAN des Empfängers (Creditor) nach ISO 13616 validieren
+        2. Empfängerkonto im System prüfen (vorhanden + aktiv)
+        3. Betrag muss positiv sein
+        4. Gutschrift auf Empfängerkonto buchen
+      tags: [payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomingPaymentRequest'
+      responses:
+        '201':
+          description: Zahlung erfolgreich verarbeitet und Gutschrift gebucht
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResult'
+        '400':
+          description: Ungültige IBAN oder Betrag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Empfängerkonto nicht aktiv
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payments/validate-iban:
+    post:
+      operationId: validateIban
+      summary: IBAN validieren
+      description: |
+        Validiert eine IBAN nach ISO 13616-1:2007.
+        Prüft Ländercode, erwartete Länge und Mod-97-Prüfziffer.
+      tags: [payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [iban]
+              properties:
+                iban:
+                  type: string
+                  example: "CH5604835012345678009"
+      responses:
+        '200':
+          description: Validierungsergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isValid:
+                    type: boolean
+                  normalizedIban:
+                    type: string
+                    description: IBAN ohne Leerzeichen, in Grossbuchstaben
+
+components:
+  schemas:
+    IncomingPaymentRequest:
+      type: object
+      required: [debtorIban, creditorIban, amount, currency, remittanceInfo]
+      properties:
+        debtorIban:
+          type: string
+          description: IBAN des Zahlungspflichtigen (Absender, extern)
+          example: "DE89370400440532013000"
+        creditorIban:
+          type: string
+          description: IBAN des Zahlungsempfängers (muss im System vorhanden sein)
+          example: "CH5604835012345678009"
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 500.00
+        currency:
+          type: string
+          enum: [CHF, EUR, USD]
+          example: "CHF"
+        remittanceInfo:
+          type: string
+          maxLength: 140
+          description: Verwendungszweck (ISO 20022, max. 140 Zeichen)
+          example: "Gutschrift Auftrag 4711"
+
+    PaymentResult:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          description: Eindeutiger Bezeichner der verarbeiteten Zahlung
+        success:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          example: "INVALID_CREDITOR_IBAN"
+        message:
+          type: string

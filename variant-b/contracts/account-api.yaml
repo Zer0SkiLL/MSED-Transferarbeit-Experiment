@@ -1,0 +1,202 @@
+openapi: "3.1.0"
+info:
+  title: Account API
+  description: |
+    Domänen-API für den Bounded Context **Account**.
+    Zuständig für Kontoführung, Saldoverwaltung, Sperrungen und Audit.
+    
+    Alle Operationen, die den Kontostatus verändern, erzeugen einen
+    unveränderlichen Audit-Log-Eintrag (Compliance-Anforderung).
+  version: "1.0.0"
+  contact:
+    name: Core Banking Team
+    email: corebanking@bank.ch
+
+servers:
+  - url: https://api.bank.internal/v1
+    description: Internes Produktivsystem
+
+tags:
+  - name: accounts
+    description: Kontoführung und Saldoverwaltung
+  - name: audit
+    description: Audit-Log (nur lesend)
+
+paths:
+  /accounts/{iban}/block:
+    post:
+      operationId: blockAccount
+      summary: Konto sperren
+      description: |
+        Sperrt das angegebene Konto. Eine Sperrung verhindert
+        sämtliche weiteren Ein- und Auszahlungen.
+        
+        **Audit:** Jede Sperrung erzeugt einen Audit-Eintrag mit
+        Zeitstempel, Initiator und Sperrgrund.
+      tags: [accounts]
+      parameters:
+        - name: iban
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$'
+            example: "CH5604835012345678009"
+          description: IBAN des zu sperrenden Kontos (ISO 13616)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockAccountRequest'
+      responses:
+        '200':
+          description: Konto erfolgreich gesperrt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOperationResponse'
+        '404':
+          description: Konto nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Konto ist bereits gesperrt oder geschlossen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /accounts/negative-balance:
+    get:
+      operationId: getAccountsWithNegativeBalance
+      summary: Konten mit negativem Saldo abrufen
+      description: |
+        Gibt alle Konten zurück, deren aktueller Saldo unter 0 liegt.
+        Wird täglich für das Risikomanagement-Reporting verwendet.
+      tags: [accounts]
+      responses:
+        '200':
+          description: Liste der Konten mit negativem Saldo
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountSummary'
+
+  /accounts/{iban}/credit:
+    post:
+      operationId: creditAccount
+      summary: Gutschrift auf Konto buchen
+      description: Schreibt eine Gutschrift auf das angegebene Konto.
+      tags: [accounts]
+      parameters:
+        - name: iban
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "CH5604835012345678009"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditRequest'
+      responses:
+        '200':
+          description: Gutschrift erfolgreich gebucht
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOperationResponse'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '422':
+          description: Konto nicht aktiv (gesperrt oder geschlossen)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    BlockAccountRequest:
+      type: object
+      required: [reason, initiatedBy]
+      properties:
+        reason:
+          type: string
+          enum: [SuspectedFraud, CustomerRequest, RegulatoryOrder, InactivityThresholdExceeded]
+          description: Fachlicher Grund der Sperrung (Pflichtfeld für Audit-Trail)
+        initiatedBy:
+          type: string
+          description: Benutzer oder System, das die Sperrung auslöst
+          example: "compliance-officer@bank.ch"
+
+    CreditRequest:
+      type: object
+      required: [amount, currency, remittanceInfo]
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 500.00
+        currency:
+          type: string
+          enum: [CHF, EUR, USD]
+        remittanceInfo:
+          type: string
+          maxLength: 140
+          description: Verwendungszweck (ISO 20022, max. 140 Zeichen)
+          example: "Gutschrift Auftrag 4711"
+
+    AccountSummary:
+      type: object
+      properties:
+        iban:
+          type: string
+          example: "CH5604835012345678010"
+        balance:
+          type: number
+          format: decimal
+          example: -200.50
+        currency:
+          type: string
+          example: "CHF"
+        status:
+          type: string
+          enum: [Active, Blocked, Closed]
+        accountType:
+          type: string
+          enum: [Girokonto, Sparkonto, Festgeldkonto]
+
+    AccountOperationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        auditEntryId:
+          type: string
+          format: uuid
+
+    ErrorResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          example: "ACCOUNT_NOT_FOUND"
+        message:
+          type: string
+
+  responses:
+    AccountNotFound:
+      description: Konto mit angegebener IBAN nicht gefunden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
