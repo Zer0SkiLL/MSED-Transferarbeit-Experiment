@@ -62,6 +62,12 @@ public class PaymentService : IPaymentService
     }
 
     /// <inheritdoc/>
+    public PaymentResult InitiateOutgoingTransfer(OutgoingTransfer transfer)
+    {
+        throw new NotImplementedException("T4: Implement via Copilot experiment");
+    }
+
+    /// <inheritdoc/>
     public bool ValidateIban(string iban)
     {
         if (string.IsNullOrWhiteSpace(iban))

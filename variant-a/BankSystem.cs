@@ -287,6 +287,16 @@ public class BankSystem
     }
 
     // ----------------------------------------------------------------
+    // T4 – Ausgehende Überweisung (Stub für Copilot-Experiment)
+    // ----------------------------------------------------------------
+    public bool InitiateOutgoingTransfer(int sourceAccountId, string destinationIban, decimal amount, string description, string initiatorId)
+    {
+        throw new NotImplementedException("T4: Implement via Copilot experiment");
+    }
+
+    public int GetAuditLogCount() => _logRows.Count;
+
+    // ----------------------------------------------------------------
     // Kontoverwaltung
     // ----------------------------------------------------------------
     public decimal GetBalance(int accId)
