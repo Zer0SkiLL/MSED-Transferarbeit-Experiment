@@ -16,11 +16,10 @@ bei identischen Entwicklungsaufgaben in zwei Codebasis-Varianten:
 
 | Werkzeug | Version | Zweck |
 |---|---|---|
-| GitHub Copilot | Enterprise (CISO-konform) | KI-Assistent unter Test |
+| GitHub Copilot | Enterprise (CISO-konform) | KI-Assistent unter Test (Geimi 3.0 Flash) |
 | Visual Studio Code | aktuell | IDE |
 | C# / .NET | 8.0 | Implementierungssprache |
 | GitHub Copilot Chat | via VS Code Extension | Prompt-Interaktion |
-| OpenCode CLI Tool | 1.2.25 | Chat & Code Generation mit Kontext |
 
 ---
 

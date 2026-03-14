@@ -25,7 +25,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         // Konto 1001 hat 1500 CHF, Limit 5000
-        bool result = sys.ProcessPayment(1001, "CH5604835012345678011", 100m, "Test-Überweisung");
+        bool result = sys.ProcessPayment(1001, "DE88500700100175526303", 100m, "Test-Überweisung");
         Assert.True(result);
     }
 
@@ -34,7 +34,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         decimal before = sys.GetBalance(1001);
-        sys.ProcessPayment(1001, "CH5604835012345678011", 100m, "Test");
+        sys.ProcessPayment(1001, "DE88 5007 0010 0175 5263 03", 100m, "Test");
         decimal after = sys.GetBalance(1001);
         // Betrag + Gebühr (0.50 bei <= 1000)
         Assert.Equal(before - 100m - 0.50m, after);
@@ -121,6 +121,15 @@ public class BankSystemTests
         var fromNegative = sys.GetNegativeBalanceAccounts().Select(r => (int)r[0]).OrderBy(x => x).ToList();
         var fromOverdrawn = sys.GetOverdrawnAccountIds().OrderBy(x => x).ToList();
         Assert.Equal(fromNegative, fromOverdrawn);
+    }
+    
+    [Fact]
+    public void T2_GenerateNegativeBalanceReport_EvalOutput() 
+    {
+        var sys = CreateSystem();
+        var result = sys.GenerateNegativeBalanceReport();
+        Assert.Contains("=== BERICHT: KONTEN MIT NEGATIVEM SALDO ===", result);
+        // TODO: assert logic
     }
 
     // ----------------------------------------------------------------
