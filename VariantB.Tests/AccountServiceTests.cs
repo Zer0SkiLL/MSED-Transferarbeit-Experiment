@@ -44,6 +44,46 @@ public class AccountServiceTests
         Assert.Contains("CH7204835012345678012", ibans);
     }
 
+    [Fact]
+    public void T2_GetNegativeBalanceReport_ContainsHeader()
+    {
+        var (service, _) = CreateService();
+        var report = service.GetNegativeBalanceReport();
+        Assert.Contains("Negative Balance Report", report);
+        Assert.Contains("=======================", report);
+    }
+
+    [Fact]
+    public void T2_GetNegativeBalanceReport_ContainsExpectedIbans()
+    {
+        var (service, _) = CreateService();
+        var report = service.GetNegativeBalanceReport();
+        Assert.Contains("CH5604835012345678010", report);
+        Assert.Contains("CH7204835012345678012", report);
+    }
+
+    [Fact]
+    public void T2_GetNegativeBalanceReport_ContainsTotalCount()
+    {
+        var (service, _) = CreateService();
+        var report = service.GetNegativeBalanceReport();
+        Assert.Contains("Total accounts: 2", report);
+    }
+
+    [Fact]
+    public void T2_GetNegativeBalanceReport_NoNegativeAccounts_ReturnsEmptyMessage()
+    {
+        var repo = new InMemoryAccountRepository();
+        foreach (var acc in repo.FindAllWithNegativeBalance())
+        {
+            var cleared = acc with { Balance = new Money(0m, acc.Balance.Currency) };
+            repo.Save(cleared);
+        }
+        var service = new AccountService(repo);
+        var report = service.GetNegativeBalanceReport();
+        Assert.Equal("No accounts with negative balance found.", report);
+    }
+
     // ----------------------------------------------------------------
     // T3 – Kontosperrung mit Audit-Log
     // ----------------------------------------------------------------

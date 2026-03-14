@@ -22,6 +22,23 @@ public record IncomingPayment(
 );
 
 /// <summary>
+/// Ausgehender Zahlungsauftrag (SEPA Credit Transfer / SIC).
+/// Repräsentiert eine vom Kunden initiierte Überweisung an eine externe IBAN.
+/// </summary>
+/// <param name="DebtorIban">IBAN des belasteten Kontos (Absender, muss im System vorhanden sein).</param>
+/// <param name="CreditorIban">IBAN des Zahlungsempfängers (extern oder intern).</param>
+/// <param name="Amount">Überweisungsbetrag mit Währung.</param>
+/// <param name="RemittanceInfo">Verwendungszweck (max. 140 Zeichen, ISO 20022).</param>
+/// <param name="InitiatedBy">Benutzer-ID des Initiators (Audit-Pflicht).</param>
+public record OutgoingTransfer(
+    string DebtorIban,
+    string CreditorIban,
+    Money Amount,
+    string RemittanceInfo,
+    string InitiatedBy
+);
+
+/// <summary>
 /// Ergebnis der Verarbeitung eines Zahlungsauftrags.
 /// </summary>
 public record PaymentResult(bool IsSuccess, string? ErrorCode = null, Guid? PaymentId = null)

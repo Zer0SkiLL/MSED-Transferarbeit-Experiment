@@ -16,11 +16,10 @@ bei identischen Entwicklungsaufgaben in zwei Codebasis-Varianten:
 
 | Werkzeug | Version | Zweck |
 |---|---|---|
-| GitHub Copilot | Enterprise (CISO-konform) | KI-Assistent unter Test |
+| GitHub Copilot | Enterprise (CISO-konform) | KI-Assistent unter Test (Geimi 3.0 Flash) |
 | Visual Studio Code | aktuell | IDE |
 | C# / .NET | 8.0 | Implementierungssprache |
 | GitHub Copilot Chat | via VS Code Extension | Prompt-Interaktion |
-| OpenCode CLI Tool | 1.2.25 | Chat & Code Generation mit Kontext |
 
 ---
 
@@ -75,6 +74,20 @@ In BankSystem.cs: The BlockAccount method should write an audit log entry. Add p
 **Variante B:**
 ```
 In AccountService.cs: The BlockAccount method should append an AccountAuditEntry after blocking. Implement this.
+```
+
+---
+
+#### T4 – Ausgehende Überweisung (InitiateOutgoingTransfer)
+
+**Variante A:**
+```
+In BankSystem.cs: Implement the InitiateOutgoingTransfer method. It should validate the destination IBAN using ISO 13616, check the source account is active, verify the amount plus a 0.50 CHF fee does not exceed the available balance or the daily transfer limit, deduct amount and fee, and write an audit log entry that includes the initiatorId. Return true if successful.
+```
+
+**Variante B:**
+```
+In PaymentService.cs: Implement the InitiateOutgoingTransfer method. It should validate the debtor IBAN, check the account is active, verify the balance covers amount plus a 0.50 CHF fee, deduct amount and fee from the debtor account, and append an AccountAuditEntry with the initiatorId from the transfer. Return a PaymentResult.
 ```
 
 ---

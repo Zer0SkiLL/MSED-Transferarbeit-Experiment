@@ -25,7 +25,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         // Konto 1001 hat 1500 CHF, Limit 5000
-        bool result = sys.ProcessPayment(1001, "CH5604835012345678011", 100m, "Test-Überweisung");
+        bool result = sys.ProcessPayment(1001, "DE88500700100175526303", 100m, "Test-Überweisung");
         Assert.True(result);
     }
 
@@ -34,7 +34,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         decimal before = sys.GetBalance(1001);
-        sys.ProcessPayment(1001, "CH5604835012345678011", 100m, "Test");
+        sys.ProcessPayment(1001, "DE88 5007 0010 0175 5263 03", 100m, "Test");
         decimal after = sys.GetBalance(1001);
         // Betrag + Gebühr (0.50 bei <= 1000)
         Assert.Equal(before - 100m - 0.50m, after);
@@ -122,6 +122,15 @@ public class BankSystemTests
         var fromOverdrawn = sys.GetOverdrawnAccountIds().OrderBy(x => x).ToList();
         Assert.Equal(fromNegative, fromOverdrawn);
     }
+    
+    [Fact]
+    public void T2_GenerateNegativeBalanceReport_EvalOutput() 
+    {
+        var sys = CreateSystem();
+        var result = sys.GenerateNegativeBalanceReport();
+        Assert.Contains("=== BERICHT: KONTEN MIT NEGATIVEM SALDO ===", result);
+        // TODO: assert logic
+    }
 
     // ----------------------------------------------------------------
     // T3 – Kontosperrung mit Audit-Log
@@ -131,7 +140,7 @@ public class BankSystemTests
     public void T3_BlockAccount_ActiveAccount_ReturnsTrue()
     {
         var sys = CreateSystem();
-        bool result = sys.BlockAccount(1001, "Fraud");
+        bool result = sys.BlockAccount(1001, "Fraud", "Test");
         Assert.True(result);
     }
 
@@ -139,7 +148,7 @@ public class BankSystemTests
     public void T3_BlockAccount_SetsStatusToBlocked()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1001, "Fraud");
+        sys.BlockAccount(1001, "Fraud", "Test");
         string status = sys.GetAccountStatus(1001);
         Assert.Equal("BLOCKED", status);
     }
@@ -149,7 +158,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         // Konto 1004 ist bereits BLOCKED
-        bool result = sys.BlockAccount(1004, "Nochmals");
+        bool result = sys.BlockAccount(1004, "Nochmals", "Test");
         Assert.False(result);
     }
 
@@ -157,7 +166,7 @@ public class BankSystemTests
     public void T3_BlockAccount_UnknownAccount_ReturnsFalse()
     {
         var sys = CreateSystem();
-        bool result = sys.BlockAccount(9999, "Test");
+        bool result = sys.BlockAccount(9999, "Test", "Test");
         Assert.False(result);
     }
 
@@ -166,7 +175,7 @@ public class BankSystemTests
     {
         var sys = CreateSystem();
         int logCountBefore = sys.GetAuditLog().Count;
-        sys.BlockAccount(1001, "SuspectedFraud");
+        sys.BlockAccount(1001, "SuspectedFraud", "Test");
         int logCountAfter = sys.GetAuditLog().Count;
         Assert.True(logCountAfter > logCountBefore);
     }
@@ -175,7 +184,7 @@ public class BankSystemTests
     public void T3_BlockAccount_AuditLogEntryContainsAccountId()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1006, "RegulatoryOrder");
+        sys.BlockAccount(1006, "RegulatoryOrder", "Test");
         var log = sys.GetAuditLogByCategory("BLOCK");
         Assert.Contains(log, e => e[2].ToString()!.Contains("1006"));
     }
@@ -184,8 +193,115 @@ public class BankSystemTests
     public void T3_BlockedAccount_CannotProcessPayment()
     {
         var sys = CreateSystem();
-        sys.BlockAccount(1001, "Fraud");
+        sys.BlockAccount(1001, "Fraud", "Test");
         bool payment = sys.ProcessPayment(1001, "CH5604835012345678011", 10m, "Test");
         Assert.False(payment);
+    }
+    
+    // ----------------------------------------------------------------
+    // T4 - InitiateOutgoingTransfer
+    // ----------------------------------------------------------------
+    
+    // Konto 1001: IBAN CH5604835012345678009, balance=1500, limit=5000, ACTIVE
+    // Konto 1004: IBAN CH7204835012345678012, balance=-1050.75, BLOCKED
+    // Konto 1006: IBAN CH5604835012345678014, balance=12300, limit=10000, ACTIVE
+    // Ziel-IBAN (extern, gültig): DE88500700100175526303
+
+    [Fact]
+    public void T4_ValidTransfer_ReturnsTrue()
+    {
+        var sys = CreateSystem();
+        bool result = sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1001,
+            destinationIban: "DE88500700100175526303",
+            amount: 100m,
+            description: "Miete",
+            initiatorId: "user-42");
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void T4_InsufficientBalance_ReturnsFalse()
+    {
+        var sys = CreateSystem();
+        // Konto 1001 hat 1500 CHF, 2000 übersteigt Saldo
+        bool result = sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1001,
+            destinationIban: "DE88500700100175526303",
+            amount: 2000m,
+            description: "Zu viel",
+            initiatorId: "user-42");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void T4_ExceedsDailyLimit_ReturnsFalse()
+    {
+        var sys = CreateSystem();
+        // Konto 1006 hat limit=10000, Betrag 10001 überschreitet Limit
+        bool result = sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1006,
+            destinationIban: "DE88500700100175526303",
+            amount: 10001m,
+            description: "Limit-Test",
+            initiatorId: "user-42");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void T4_BlockedSourceAccount_ReturnsFalse()
+    {
+        var sys = CreateSystem();
+        // Konto 1004 ist BLOCKED
+        bool result = sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1004,
+            destinationIban: "DE88500700100175526303",
+            amount: 10m,
+            description: "Gesperrtes Konto",
+            initiatorId: "user-42");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void T4_UnknownSourceAccount_ReturnsFalse()
+    {
+        var sys = CreateSystem();
+        bool result = sys.InitiateOutgoingTransfer(
+            sourceAccountId: 9999,
+            destinationIban: "DE88500700100175526303",
+            amount: 10m,
+            description: "Unbekanntes Konto",
+            initiatorId: "user-42");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void T4_FeeDeducted_BalanceIsAmountPlusFiftyRappen()
+    {
+        var sys = CreateSystem();
+        decimal before = sys.GetBalance(1001);
+        sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1001,
+            destinationIban: "DE88500700100175526303",
+            amount: 100m,
+            description: "Fee-Test",
+            initiatorId: "user-42");
+        decimal after = sys.GetBalance(1001);
+        Assert.Equal(before - 100m - 0.50m, after);
+    }
+
+    [Fact]
+    public void T4_SuccessfulTransfer_AuditLogEntryWritten()
+    {
+        var sys = CreateSystem();
+        int logBefore = sys.GetAuditLogCount();
+        sys.InitiateOutgoingTransfer(
+            sourceAccountId: 1001,
+            destinationIban: "DE88500700100175526303",
+            amount: 50m,
+            description: "Audit-Test",
+            initiatorId: "user-42");
+        int logAfter = sys.GetAuditLogCount();
+        Assert.True(logAfter > logBefore);
     }
 }

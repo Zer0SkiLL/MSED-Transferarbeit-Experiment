@@ -104,8 +104,12 @@ public class BankSystem
         if ((string)src[5] != "ACTIVE") return false;
         if ((decimal)src[3] < amount) return false;
 
-        // Rudimentäre IBAN-Prüfung: nur Länge
-        if (toIban == null || toIban.Length < 15) return false;
+        // Proper IBAN validation according to ISO 13616
+        if (!IsValidIban(toIban))
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TX_ERROR", $"Invalid IBAN: {toIban}", "system", "WARN" });
+            return false;
+        }
 
         // Tages-Limit prüfen
         object[]? lim = null;
@@ -232,7 +236,7 @@ public class BankSystem
     // ----------------------------------------------------------------
     // T3 – Konto sperren
     // ----------------------------------------------------------------
-    public bool BlockAccount(int accId, string reason)
+    public bool BlockAccount(int accId, string reason, string userId)
     {
         foreach (var r in _dataRows)
         {
@@ -242,7 +246,7 @@ public class BankSystem
                 r[5] = "BLOCKED";
                 _logRows.Add(new object[] {
                     DateTime.Now.ToString("o"), "BLOCK",
-                    $"Account {accId} blocked. Reason: {reason}", "system", "WARN"
+                    $"Account {accId} blocked. Reason: {reason}", userId, "WARN"
                 });
                 // TODO: Benachrichtigung an Kunden – noch nicht implementiert
                 return true;
@@ -281,6 +285,84 @@ public class BankSystem
         }
         return false;
     }
+
+    // ----------------------------------------------------------------
+    // T4 – Ausgehende Überweisung (Stub für Copilot-Experiment)
+    // ----------------------------------------------------------------
+    public bool InitiateOutgoingTransfer(int sourceAccountId, string destinationIban, decimal amount, string description, string initiatorId)
+    {
+        // 1. IBAN-Validierung nach ISO 13616 (nutzt vorhandene Hilfsmethode)
+        if (!IsValidIban(destinationIban))
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Invalid IBAN: {destinationIban}", initiatorId, "WARN" });
+            return false;
+        }
+
+        // 2. Quellkonto suchen
+        object[]? src = null;
+        foreach (var r in _dataRows)
+        {
+            if ((int)r[0] == sourceAccountId) { src = r; break; }
+        }
+
+        // 3. Status und Deckung prüfen
+        if (src == null) return false;
+        if ((string)src[5] != "ACTIVE") return false;
+
+        decimal fee = 0.50m;
+        decimal totalAmount = amount + fee;
+        decimal balance = (decimal)src[3];
+        decimal creditLimit = (decimal)src[7];
+
+        if (balance < totalAmount)
+        {
+            _logRows.Add(new object[] { DateTime.Now.ToString("o"), "TRANSFER_ERROR", $"Insufficient funds: Balance {balance} is less than required {totalAmount}", initiatorId, "WARN" });
+            return false;
+        }
+
+        // 4. Tages-Limit prüfen
+        object[]? lim = null;
+        foreach (var l in _limitRows)
+        {
+            if ((int)l[0] == sourceAccountId) { lim = l; break; }
+        }
+
+        if (lim != null)
+        {
+            decimal used = (decimal)lim[3];
+            decimal dailyLimit = (decimal)lim[1];
+            if (used + amount > dailyLimit)
+            {
+                _logRows.Add(new object[] { DateTime.Now.ToString("o"), "LIMIT", $"Daily limit exceeded for account {sourceAccountId}", initiatorId, "WARN" });
+                return false;
+            }
+            // Limit aktualisieren
+            lim[3] = used + amount;
+        }
+
+        // 5. Buchung durchführen
+        src[3] = balance - totalAmount;
+
+        // Transaktion erfassen
+        int txId = ++_nextTxId;
+        _txRows.Add(new object[] { txId, sourceAccountId, destinationIban, amount, DateTime.Now, description, "OUT", "SETTLED", fee });
+        
+        // Gebühr separat loggen (wie in ProcessPayment)
+        _feeRows.Add(new object[] { txId, sourceAccountId, fee, DateTime.Now, "OUTGOING_TRANSFER_FEE" });
+
+        // Audit Log mit initiatorId
+        _logRows.Add(new object[] { 
+            DateTime.Now.ToString("o"), 
+            "TRANSFER", 
+            $"Outgoing transfer of {amount} (Fee: {fee}) to {destinationIban} initiated by {initiatorId}", 
+            initiatorId, 
+            "INFO" 
+        });
+
+        return true;
+    }
+
+    public int GetAuditLogCount() => _logRows.Count;
 
     // ----------------------------------------------------------------
     // Kontoverwaltung
@@ -708,6 +790,39 @@ public class BankSystem
         }
         Console.WriteLine($"Total Aktiven: {totalAssets:F2} CHF  Passiven: {totalLiabilities:F2} CHF");
     }
+    
+    // ----------------------------------------------------------------
+    // Berichtswesen - Erweiterung
+    // ----------------------------------------------------------------
+    public string GenerateNegativeBalanceReport()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("=== BERICHT: KONTEN MIT NEGATIVEM SALDO ===");
+        sb.AppendLine($"Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm}");
+        sb.AppendLine("----------------------------------------------------------------");
+        sb.AppendLine(string.Format("{0,-10} | {1,-10} | {2,15} | {3,-5} | {4,-10}", "AccId", "CustId", "Saldo", "Ccy", "Status"));
+        sb.AppendLine("----------------------------------------------------------------");
+
+        int count = 0;
+        foreach (var r in _dataRows)
+        {
+            decimal balance = (decimal)r[3];
+            if (balance < 0)
+            {
+                // Mapping index based on internal documentation:
+                // [id (0), customerId (1), type (2), balance (3), currency (4), status (5), ...]
+                sb.AppendLine(string.Format("{0,-10} | {1,-10} | {2,15:N2} | {3,-5} | {4,-10}", 
+                    r[0], r[1], balance, r[4], r[5]));
+                count++;
+            }
+        }
+
+        sb.AppendLine("----------------------------------------------------------------");
+        sb.AppendLine($"Anzahl betroffene Konten: {count}");
+        
+        return sb.ToString();
+    }
+
 
     // ----------------------------------------------------------------
     // Benachrichtigungen
@@ -786,5 +901,43 @@ public class BankSystem
             if ((string)r[4] == currency && (string)r[5] != "CLOSED")
                 total += (decimal)r[3];
         return total;
+    }
+    
+    private bool IsValidIban(string iban)
+    {
+        if (string.IsNullOrWhiteSpace(iban)) return false;
+
+        // 1. Basic format and length check (ISO 13616: 15 to 34 characters)
+        string normalized = iban.Replace(" ", "").ToUpper();
+        if (normalized.Length < 15 || normalized.Length > 34) return false;
+
+        // 2. Move first 4 characters to the end
+        string rearranged = normalized.Substring(4) + normalized.Substring(0, 4);
+
+        // 3. Convert letters to digits
+        string numericIban = "";
+        foreach (char c in rearranged)
+        {
+            if (char.IsDigit(c))
+            {
+                numericIban += c;
+            }
+            else if (char.IsLetter(c))
+            {
+                numericIban += (c - 'A' + 10).ToString();
+            }
+            else
+            {
+                return false; // Invalid character
+            }
+        }
+
+        // 4. Modulo 97 check using BigInteger (due to number size)
+        if (!System.Numerics.BigInteger.TryParse(numericIban, out System.Numerics.BigInteger ibanNumber))
+        {
+            return false;
+        }
+
+        return ibanNumber % 97 == 1;
     }
 }

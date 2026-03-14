@@ -21,6 +21,16 @@ public interface IPaymentService
     PaymentResult ReceiveIncomingPayment(IncomingPayment payment);
 
     /// <summary>
+    /// Initiiert eine ausgehende Überweisung.
+    /// Validiert die Ziel-IBAN nach ISO 13616, prüft ob das Quellkonto aktiv ist,
+    /// stellt sicher dass Betrag plus Gebühr (0.50 CHF) den Saldo nicht übersteigt,
+    /// belastet das Konto und schreibt einen Audit-Log-Eintrag.
+    /// </summary>
+    /// <param name="transfer">Der ausgehende Zahlungsauftrag inkl. Initiator-ID.</param>
+    /// <returns>Ergebnis mit PaymentId bei Erfolg oder ErrorCode bei Ablehnung.</returns>
+    PaymentResult InitiateOutgoingTransfer(OutgoingTransfer transfer);
+
+    /// <summary>
     /// Validiert eine IBAN nach ISO 13616 (Ländercode, Prüfziffer, Länge).
     /// </summary>
     /// <param name="iban">Zu prüfende IBAN (mit oder ohne Leerzeichen).</param>
