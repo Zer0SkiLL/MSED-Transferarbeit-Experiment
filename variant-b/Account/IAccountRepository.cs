@@ -52,7 +52,7 @@ public class InMemoryAccountRepository : IAccountRepository
                 AccountType.Sparkonto,  new Money(-200.50m, Currency.CHF), AccountStatus.Active),
             new BankAccount(new AccountId("CH5604835012345678011"), "CH5604835012345678011", 2,
                 AccountType.Girokonto, new Money(800.00m,  Currency.CHF), AccountStatus.Active),
-            new BankAccount(new AccountId("CH5604835012345678012"), "CH5604835012345678012", 2,
+            new BankAccount(new AccountId("CH7204835012345678012"), "CH7204835012345678012", 2,
                 AccountType.Sparkonto,  new Money(-1050.75m,Currency.CHF), AccountStatus.Blocked),
             new BankAccount(new AccountId("CH5604835012345678013"), "CH5604835012345678013", 3,
                 AccountType.Girokonto, new Money(0.00m,    Currency.CHF), AccountStatus.Active),

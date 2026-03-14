@@ -34,7 +34,7 @@ foreach (var acc in negativeAccounts)
 
 // T3: Konto sperren mit Audit-Log
 var blockResult = accountService.BlockAccount(
-    iban: "CH5604835012345678012",
+    iban: "CH7204835012345678012",
     reason: BlockReason.SuspectedFraud,
     initiatedBy: "compliance-officer@bank.ch"
 );

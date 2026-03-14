@@ -160,7 +160,8 @@ components:
       properties:
         iban:
           type: string
-          example: "CH5604835012345678010"
+          example: "CH7204835012345678012"
+
         balance:
           type: number
           format: decimal

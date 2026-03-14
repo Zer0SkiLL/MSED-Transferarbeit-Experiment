@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BankApp.VariantA", "variant-a\BankApp.csproj", "{20462A5A-2628-42D4-BB62-FB8ACB3AFC6F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BankApp.VariantB", "variant-b\BankApp.csproj", "{2A4DFFB6-F013-4283-A754-EE6379B3F5C4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VariantA.Tests", "VariantA.Tests\VariantA.Tests.csproj", "{65DB4538-027E-4BFD-B0F0-54CB65F596EE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VariantB.Tests", "VariantB.Tests\VariantB.Tests.csproj", "{1174A5FA-7C04-4819-9D49-96C96539EE48}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{20462A5A-2628-42D4-BB62-FB8ACB3AFC6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20462A5A-2628-42D4-BB62-FB8ACB3AFC6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20462A5A-2628-42D4-BB62-FB8ACB3AFC6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20462A5A-2628-42D4-BB62-FB8ACB3AFC6F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A4DFFB6-F013-4283-A754-EE6379B3F5C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A4DFFB6-F013-4283-A754-EE6379B3F5C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A4DFFB6-F013-4283-A754-EE6379B3F5C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A4DFFB6-F013-4283-A754-EE6379B3F5C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65DB4538-027E-4BFD-B0F0-54CB65F596EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65DB4538-027E-4BFD-B0F0-54CB65F596EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65DB4538-027E-4BFD-B0F0-54CB65F596EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65DB4538-027E-4BFD-B0F0-54CB65F596EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1174A5FA-7C04-4819-9D49-96C96539EE48}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1174A5FA-7C04-4819-9D49-96C96539EE48}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1174A5FA-7C04-4819-9D49-96C96539EE48}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1174A5FA-7C04-4819-9D49-96C96539EE48}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
